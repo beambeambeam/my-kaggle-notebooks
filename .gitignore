@@ -1,0 +1,67 @@
+# uv (Python package manager)
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+.jupyter/
+.ipynb_*
+*.log
+
+# Kaggle
+.kaggle/
+*.csv
+.cache/
+submissions/
+data/
+raw_data/
+
+# Environment and config
+.env
+.env.local
+.env.*.local
+.python-version
+
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+.directory
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+*.orig
