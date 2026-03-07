@@ -1,0 +1,4 @@
+# Keep this folder tracked, but ignore dumped contents.
+*
+!.gitignore
+!.keep
