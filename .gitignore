@@ -65,3 +65,5 @@ dmypy.json
 *.bak
 *.backup
 *.orig
+
+/outputs/*
