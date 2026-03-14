@@ -224,3 +224,7 @@ Reference notebooks:
 5. Create `01` baseline notebook.
 6. Create later drafts as needed using the same code prefix.
 7. Keep logs and generated outputs ignored by git.
+
+## UV
+
+THIS IS UV PYTHON UV USING UV

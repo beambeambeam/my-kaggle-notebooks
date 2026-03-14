@@ -140,6 +140,11 @@ After creation:
 - confirm the chosen 6-character code
 - mention any placeholders the user still needs to customize
 
+
+### 6. UV init
+
+uv init for this folder.
+
 ## What To Put In The Markdown Files
 
 ### `overview.md`
