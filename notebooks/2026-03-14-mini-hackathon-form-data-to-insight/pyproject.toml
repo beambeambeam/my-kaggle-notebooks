@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
+    "ipykernel>=6.29.0",
+    "ipython>=8.30.0",
     "kaleido>=1.2.0",
     "matplotlib>=3.10.8",
     "numpy>=2.4.3",
