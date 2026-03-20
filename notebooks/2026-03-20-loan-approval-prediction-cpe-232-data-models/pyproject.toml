@@ -1,0 +1,7 @@
+[project]
+name = "2026-03-20-loan-approval-prediction-cpe-232-data-models"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
