@@ -11,8 +11,9 @@ from preview_constituency_votes import DOC_ID_PATTERN, PreviewError, normalize_p
 
 
 THAI_DIGIT_TRANS = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
-MARKDOWN_ROW_RE = re.compile(r"^\|.*\|$")
 NUMBER_RE = re.compile(r"([0-9๐-๙][0-9๐-๙,]*)")
+PARTY_LIST_DOC_ID_RE = re.compile(r"^party_list_(\d+)_(\d+)$")
+LEADING_ROW_NUMBER_RE = re.compile(r"^[0-9๐-๙]+\s*")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -57,8 +58,13 @@ def write_submission_table(path: Path, rows: list[dict[str, str]]) -> None:
 def normalize_party_name(name: str) -> str:
     normalized = base_normalize_party_name(name)
     normalized = normalized.replace("\u200b", "").replace("\ufeff", "")
+    normalized = LEADING_ROW_NUMBER_RE.sub("", normalized)
     normalized = re.sub(r"\s+", "", normalized)
     return normalized
+
+
+def is_supported_doc_id(doc_id: str) -> bool:
+    return DOC_ID_PATTERN.fullmatch(doc_id) is not None or PARTY_LIST_DOC_ID_RE.fullmatch(doc_id) is not None
 
 
 def normalize_vote_token(value: str) -> str | None:
@@ -74,25 +80,54 @@ def is_summary_text(value: str) -> bool:
     return "รวมคะแนนทั้งสิ้น" in compact
 
 
-def parse_markdown_table_votes(text: str) -> dict[str, str]:
+def extract_vote_from_cells(
+    cells: list[str], expected_parties: set[str]
+) -> tuple[str, str] | None:
+    normalized_cells = [normalize_party_name(cell) for cell in cells]
+    party_index: int | None = None
+    party_name: str | None = None
+
+    for index, normalized_cell in enumerate(normalized_cells):
+        if normalized_cell in expected_parties:
+            party_index = index
+            party_name = normalized_cell
+            break
+
+    if party_index is None or party_name is None:
+        return None
+
+    for cell in cells[party_index + 1 :]:
+        vote_value = normalize_vote_token(cell)
+        if vote_value is not None:
+            return party_name, vote_value
+
+    return None
+
+
+def parse_delimited_table_votes(
+    text: str, expected_parties: set[str]
+) -> dict[str, str]:
     votes_by_party: dict[str, str] = {}
 
     for raw_line in text.splitlines():
         line = raw_line.strip()
-        if not MARKDOWN_ROW_RE.fullmatch(line):
+        if "|" not in line:
             continue
 
-        cells = [cell.strip() for cell in line.strip("|").split("|")]
-        if len(cells) < 4:
+        cells = [cell.strip() for cell in line.split("|")]
+        cells = [cell for cell in cells if cell]
+        if len(cells) < 2:
             continue
-        if cells[0].startswith("---") or "หมายเลข" in cells[0]:
+        if all(set(cell) <= {"-"} for cell in cells):
             continue
-        if is_summary_text(cells[1]) or is_summary_text(cells[2]):
+        if any("หมายเลข" in cell or "ได้คะแนน" in cell for cell in cells):
+            continue
+        if any(is_summary_text(cell) for cell in cells):
             continue
 
-        party_name = normalize_party_name(cells[2])
-        vote_value = normalize_vote_token(cells[3])
-        if party_name and vote_value is not None:
+        extracted = extract_vote_from_cells(cells, expected_parties)
+        if extracted is not None:
+            party_name, vote_value = extracted
             votes_by_party[party_name] = vote_value
 
     return votes_by_party
@@ -113,6 +148,12 @@ def parse_plain_votes(text: str, expected_parties: set[str]) -> dict[str, str]:
     lines = clean_plain_lines(text)
 
     for index, line in enumerate(lines):
+        inline_match = extract_vote_from_cells([cell.strip() for cell in line.split("|")], expected_parties)
+        if inline_match is not None:
+            party_name, vote_value = inline_match
+            votes_by_party[party_name] = vote_value
+            continue
+
         party_name = normalize_party_name(line)
         if party_name not in expected_parties:
             continue
@@ -144,7 +185,7 @@ def build_expected_parties(
     expected_by_doc_id: dict[str, set[str]] = defaultdict(set)
     for row in template_rows:
         doc_id = row["doc_id"]
-        if not DOC_ID_PATTERN.fullmatch(doc_id):
+        if not is_supported_doc_id(doc_id):
             continue
         expected_by_doc_id[doc_id].add(normalize_party_name(row["party_name"]))
     return expected_by_doc_id
@@ -154,7 +195,7 @@ def group_ocr_rows(ocr_rows: list[dict[str, str]]) -> dict[str, list[dict[str, s
     grouped: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in ocr_rows:
         doc_id = row["doc_id"]
-        if DOC_ID_PATTERN.fullmatch(doc_id):
+        if is_supported_doc_id(doc_id):
             grouped[doc_id].append(row)
     return grouped
 
@@ -166,9 +207,10 @@ def parse_doc_votes(
 
     for row in sorted(doc_rows, key=lambda item: int(item["page"])):
         text = row.get("ocr_text", "")
-        for party_name, vote_value in parse_markdown_table_votes(text).items():
-            if party_name in expected_parties:
-                votes_by_party[party_name] = vote_value
+        for party_name, vote_value in parse_delimited_table_votes(
+            text, expected_parties
+        ).items():
+            votes_by_party[party_name] = vote_value
 
         for party_name, vote_value in parse_plain_votes(text, expected_parties).items():
             votes_by_party[party_name] = vote_value
@@ -208,7 +250,7 @@ def main() -> int:
         for row in template_rows:
             doc_id = row["doc_id"]
             votes = "0"
-            if DOC_ID_PATTERN.fullmatch(doc_id):
+            if is_supported_doc_id(doc_id):
                 party_name = normalize_party_name(row["party_name"])
                 matched_vote = parsed_votes_by_doc_id.get(doc_id, {}).get(party_name)
                 if matched_vote is not None:
@@ -226,7 +268,7 @@ def main() -> int:
         print(f"wrote          : {output_path}")
         print(f"template rows  : {len(template_rows)}")
         print(f"ocr rows       : {len(ocr_rows)}")
-        print(f"constituency docs: {len(expected_by_doc_id)}")
+        print(f"supported docs : {len(expected_by_doc_id)}")
         print(f"docs with votes: {docs_with_votes}")
         print(f"matched rows   : {matched_rows}")
         print(f"zero rows      : {zero_rows}")
